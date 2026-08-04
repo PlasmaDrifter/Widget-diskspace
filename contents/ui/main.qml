@@ -44,30 +44,12 @@ PlasmoidItem {
                 parseDiskData(data.stdout)
                 // Disconnect immediately after reading to free up the engine
                 disconnectSource(source)
-            } else if (source.indexOf("plasma-custom-opacity.txt") !== -1) {
-                disconnectSource(source)
-                var stdout = data["stdout"] || "";
-                var val = parseFloat(stdout.trim());
-                if (!isNaN(val) && val >= 0.0 && val <= 1.0) {
-                    if (root.sharedOpacity !== val) {
-                        root.sharedOpacity = val;
-                    }
-                    if (plasmoid.configuration.bgOpacity !== val) {
-                        plasmoid.configuration.bgOpacity = val;
-                    }
-                }
             }
         }
     }
 
     Connections {
         target: plasmoid.configuration
-        function onBgOpacityChanged() {
-            var newOpacity = plasmoid.configuration.bgOpacity;
-            if (Math.abs(root.sharedOpacity - newOpacity) > 0.01) {
-                dataSource.connectSource("echo " + newOpacity + " > /home/jmc/.config/plasma-custom-opacity.txt");
-            }
-        }
         function onDisplayedDrivesChanged() {
             dataSource.update()
         }
@@ -197,21 +179,10 @@ PlasmoidItem {
         onTriggered: dataSource.update()
     }
 
-    Timer {
-        id: sharedOpacityTimer
-        interval: 1000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            dataSource.connectSource("cat /home/jmc/.config/plasma-custom-opacity.txt");
-        }
-    }
-
     compactRepresentation: Component {
         Item {
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 10
-            Layout.minimumHeight: Kirigami.Units.gridUnit * 6
+            Layout.minimumWidth: Kirigami.Units.gridUnit * 2
+            Layout.minimumHeight: Kirigami.Units.gridUnit * 1
             clip: true
 
             Rectangle {
@@ -297,8 +268,8 @@ PlasmoidItem {
 
     fullRepresentation: Component {
         Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            Layout.minimumWidth: Kirigami.Units.gridUnit * 4
+            Layout.minimumHeight: Kirigami.Units.gridUnit * 3
             clip: true
 
             Rectangle {
