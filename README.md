@@ -34,7 +34,7 @@ A clean, modern disk usage gauge for root, home, and external storage mount poin
 ### Option 1: Git Clone (Recommended)
 ```bash
 mkdir -p ~/.local/share/plasma/plasmoids/
-git clone https://github.com/PlasmaDrifter/diskspace.git ~/.local/share/plasma/plasmoids/local.widget.diskspace
+git clone https://github.com/PlasmaDrifter/Widget-diskspace.git ~/.local/share/plasma/plasmoids/local.widget.diskspace
 ```
 
 ### Option 2: Plasma Package Installer
