@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-LGPL%202.1+-blue.svg?style=for-the-badge)](LICENSE)
 
 > [!NOTE]
-> **Community Hub:** Have questions, custom configs, or feature ideas? Join our subreddit community at [**r/PlasmaDrifterProjects**](https://reddit.com/r/PlasmaDrifterProjects)!
+> **Questions, custom configs, or ideas?** Join us on Reddit at <nobr>[**r/PlasmaDrifterProjects**](https://reddit.com/r/PlasmaDrifterProjects)</nobr>!
 
 A clean, modern disk usage gauge for root, home, and external storage mount points in KDE Plasma 6.
 
