@@ -7,6 +7,9 @@
 
 A clean, modern disk usage gauge for root, home, and external storage mount points in KDE Plasma 6.
 
+> [!NOTE]
+> **Questions, custom configs, or ideas?** Join us on Reddit at <nobr>[**r/PlasmaDrifterProjects**](https://reddit.com/r/PlasmaDrifterProjects)</nobr>!
+
 ---
 
 ## Previews
@@ -48,3 +51,11 @@ Then right-click your desktop or panel $\rightarrow$ **Add Widgets...** and sear
 
 - **Author / Maintainer**: PlasmaDrifter
 - **License**: Licensed under the [LGPL 2.1+](LICENSE).
+
+---
+
+## 💬 Community & Discussions
+
+Got questions, setup ideas, or feedback?
+
+* 🌐 Join our subreddit at [**r/PlasmaDrifterProjects**](https://reddit.com/r/PlasmaDrifterProjects) to discuss updates, get support, and share configurations.
