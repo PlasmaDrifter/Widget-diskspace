@@ -30,11 +30,24 @@ KCM.SimpleKCM {
     function getDefaultFriendlyName(mount) {
         if (mount === '/') return i18n("Root");
         if (mount === '/home') return i18n("Home");
-        if (mount === '/home/jmc/Storage/nvme1tb') return i18n("Steam");
-        if (mount === '/home/jmc/Storage/disk3tb') return i18n("3 TB HD");
-        if (mount === '/home/jmc/Storage/disk8tb') return i18n("8 TB HD");
-        if (mount === '/home/jmc/Storage/nvme2tb') return i18n("2 TB NVME");
         return mount.split('/').pop() || mount;
+    }
+
+    function parseMountMap(raw, validator) {
+        var result = {};
+        var lines = (raw || "").split('\n');
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (!line) continue;
+            var sep = line.indexOf(':');
+            if (sep <= 0) continue;
+            var mount = line.slice(0, sep).trim();
+            var value = line.slice(sep + 1).trim();
+            if (!validator || validator(value)) {
+                result[mount] = value;
+            }
+        }
+        return result;
     }
 
     function loadSettings() {
@@ -46,28 +59,11 @@ KCM.SimpleKCM {
             displayedMap[mount] = true;
         });
 
-        var colorsMap = {};
-        var colorLines = root.cfg_driveColors.split('\n').filter(function(line) { return line.trim(); });
-        colorLines.forEach(function(line) {
-            var parts = line.split(':');
-            if (parts.length === 2) {
-                var mount = parts[0].trim();
-                var color = parts[1].trim();
-                if (color.match(/^#[0-9A-Fa-f]{6}$/)) {
-                    colorsMap[mount] = color;
-                }
-            }
+        var colorsMap = root.parseMountMap(root.cfg_driveColors, function(v) {
+            return /^#[0-9A-Fa-f]{6}$/.test(v);
         });
-
-        var labelsMap = {};
-        var labelLines = root.cfg_driveLabels.split('\n').filter(function(line) { return line.trim(); });
-        labelLines.forEach(function(line) {
-            var parts = line.split(':');
-            if (parts.length === 2) {
-                var mount = parts[0].trim();
-                var label = parts[1].trim();
-                labelsMap[mount] = label;
-            }
+        var labelsMap = root.parseMountMap(root.cfg_driveLabels, function(v) {
+            return v.length > 0;
         });
 
         var added = {};
@@ -101,7 +97,7 @@ KCM.SimpleKCM {
                     mountPoint: mount,
                     displayed: false,
                     color: colorsMap[mount] || "#ffffff",
-                    customLabel: labelsMap[mount]
+                    customLabel: labelsMap[mount] || ""
                 });
                 added[mount] = true;
             }
@@ -135,21 +131,19 @@ KCM.SimpleKCM {
 
     function parseDfOutput(stdout) {
         if (!stdout) return;
-        var lines = stdout.split('\n').filter(function(line) { return line.trim() && !line.startsWith('Filesystem'); });
-        lines.forEach(function(line) {
-            var parts = line.trim().split(/\s+/);
-            if (parts.length >= 5) {
-                var mount = parts[parts.length - 1];
-                if (mount.startsWith('/') && !mount.startsWith('/sys') && !mount.startsWith('/proc') && !mount.startsWith('/run') && !mount.startsWith('/dev')) {
-                    if (!root.addedDrives[mount]) {
-                        drivesModel.append({
-                            mountPoint: mount,
-                            displayed: false,
-                            color: root.colorsMap[mount] || "#ffffff",
-                            customLabel: root.labelsMap[mount] || ""
-                        });
-                        root.addedDrives[mount] = true;
-                    }
+        var lines = stdout.split('\n');
+        lines.forEach(function(rawLine) {
+            var mount = rawLine.trim();
+            if (!mount || mount === 'Mounted on') return;
+            if (mount.startsWith('/') && !mount.startsWith('/sys') && !mount.startsWith('/proc') && !mount.startsWith('/run') && !mount.startsWith('/dev')) {
+                if (!root.addedDrives[mount]) {
+                    drivesModel.append({
+                        mountPoint: mount,
+                        displayed: false,
+                        color: root.colorsMap[mount] || "#ffffff",
+                        customLabel: root.labelsMap[mount] || ""
+                    });
+                    root.addedDrives[mount] = true;
                 }
             }
         });
@@ -173,7 +167,7 @@ KCM.SimpleKCM {
 
     Component.onCompleted: {
         root.loadSettings()
-        executable.exec("timeout 5 df -BK")
+        executable.exec("timeout 3 df -BK -l --output=target 2>/dev/null")
     }
 
     Kirigami.FormLayout {
@@ -286,7 +280,7 @@ KCM.SimpleKCM {
                             font.bold: model.displayed
                             Layout.fillWidth: true
                             placeholderText: root.getDefaultFriendlyName(model.mountPoint)
-                            onTextChanged: {
+                            onTextEdited: {
                                 drivesModel.setProperty(index, "customLabel", text);
                                 root.saveSettings();
                             }

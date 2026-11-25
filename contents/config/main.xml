@@ -28,35 +28,20 @@
             <default>#FF6B6B</default>
         </entry>
         <entry name="driveColors" type="String">
-            <default>
-/home:  #ff00ff
-
-/home/jmc/Storage/nvme1tb:  #ff00ff
-/home/jmc/Storage/disk3tb:  #55ffff
-/home/jmc/Storage/disk8tb:  #55ffff
-/home/jmc/Storage/nvme2tb:  #6AE05C</default>
+            <default>/:  #6BCB77
+/home:  #55ffff</default>
         </entry>
         <entry name="driveLabels" type="String">
-            <default>
-/home:  Home
-/home/jmc/Storage/nvme1tb:  Steam
-/home/jmc/Storage/disk3tb:  3 TB HD
-/home/jmc/Storage/disk8tb:  8 TB HD
-/home/jmc/Storage/nvme2tb:  2 TB NVME</default>
+            <default>/:  Root
+/home:  Home</default>
         </entry>
         <entry name="displayedDrives" type="String">
-            <default>/home
-/home/jmc/Storage/disk3tb
-/home/jmc/Storage/disk8tb
-/home/jmc/Storage/nvme2tb
-/home/jmc/Storage/nvme1tb</default>
+            <default>/
+/home</default>
         </entry>
         <entry name="driveOrder" type="String">
-            <default>/home
-/home/jmc/Storage/disk3tb
-/home/jmc/Storage/disk8tb
-/home/jmc/Storage/nvme2tb
-/home/jmc/Storage/nvme1tb</default>
+            <default>/
+/home</default>
         </entry>
     </group>
 

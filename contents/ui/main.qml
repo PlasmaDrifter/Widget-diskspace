@@ -9,14 +9,45 @@ import org.kde.plasma.plasma5support as Plasma5Support
 PlasmoidItem {
     id: root
 
-    preferredRepresentation: preferredRepresentation
-
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
-    // We keep track of the current command string so we can explicitly kill it
-    property string currentCmd: "timeout 5 df -BK"
-    property real sharedOpacity: 0.3
+    property string currentCmd: ""
+    property var lastKnownStats: ({})
     readonly property var fontWeights: [400, 500, 600, 700]
+
+    function shellQuote(value) {
+        return "'" + String(value).replace(/'/g, "'\\''") + "'"
+    }
+
+    function fallbackLabel(mount) {
+        if (mount === '/') return i18n("Root")
+        if (mount === '/home') return i18n("Home")
+        return mount.split('/').pop() || mount
+    }
+
+    function parseMountMap(raw, validator) {
+        const result = {}
+        const lines = (raw || "").split('\n')
+        for (let i = 0; i < lines.length; ++i) {
+            const line = lines[i].trim()
+            if (!line) continue
+            const sep = line.indexOf(':')
+            if (sep <= 0) continue
+            const driveName = line.slice(0, sep).trim()
+            const val = line.slice(sep + 1).trim()
+            if (!validator || validator(val)) {
+                result[driveName] = val
+            }
+        }
+        return result
+    }
+
+    function getDisplayedDrives() {
+        return (plasmoid.configuration.displayedDrives || "")
+            .split('\n')
+            .map(function(m) { return m.trim(); })
+            .filter(function(m) { return m.length > 0; })
+    }
 
     Plasma5Support.DataSource {
         id: dataSource
@@ -24,25 +55,26 @@ PlasmoidItem {
         connectedSources: []
 
         function update() {
-            // Completely disconnect the old command string first
-            disconnectSource(root.currentCmd)
+            if (root.currentCmd) {
+                disconnectSource(root.currentCmd)
+            }
 
-            const displayedDrives = plasmoid.configuration.displayedDrives.split('\n').map(function(m) { return m.trim(); }).filter(function(m) { return m; })
+            const displayedDrives = root.getDisplayedDrives()
             if (displayedDrives.length === 0) {
                 diskModel.clear()
                 return
             }
 
-            const drives = displayedDrives.map(function(m) { return '"' + m.replace(/"/g, '\\"') + '"'; }).join(" ")
-            root.currentCmd = "for m in " + drives + "; do timeout 2 df -BK \"$m\" 2>/dev/null; done # " + Date.now()
-
+            const jobs = displayedDrives.map(function(m) {
+                return "timeout 2 df -BK --output=pcent,avail,target -- " + root.shellQuote(m) + " 2>/dev/null | sed -n '2p' &"
+            })
+            root.currentCmd = jobs.join(" ") + " wait"
             connectSource(root.currentCmd)
         }
 
         onNewData: function(source, data) {
             if (source === root.currentCmd) {
                 parseDiskData(data.stdout)
-                // Disconnect immediately after reading to free up the engine
                 disconnectSource(source)
             }
         }
@@ -54,10 +86,10 @@ PlasmoidItem {
             dataSource.update()
         }
         function onDriveColorsChanged() {
-            dataSource.update()
+            root.syncDiskModel()
         }
         function onDriveLabelsChanged() {
-            dataSource.update()
+            root.syncDiskModel()
         }
     }
 
@@ -65,55 +97,9 @@ PlasmoidItem {
         id: diskModel
     }
 
-    function getDriveColor(mount) {
-        const colors = {}
-        const lines = plasmoid.configuration.driveColors.split('\n').filter(line => line.trim())
-
-        lines.forEach(line => {
-            const parts = line.split(':')
-            if (parts.length === 2) {
-                const driveName = parts[0].trim()
-                const color = parts[1].trim()
-                if (color.match(/^#[0-9A-Fa-f]{6}$/)) {
-                    colors[driveName] = color
-                }
-            }
-        })
-
-        return colors[mount] || "#FFFFFF"
-    }
-
-    function getDriveLabel(mount) {
-        const labels = {}
-        const lines = plasmoid.configuration.driveLabels.split('\n').filter(line => line.trim())
-
-        lines.forEach(line => {
-            const parts = line.split(':')
-            if (parts.length === 2) {
-                const driveName = parts[0].trim()
-                const labelName = parts[1].trim()
-                if (labelName.length > 0) {
-                    labels[driveName] = labelName
-                }
-            }
-        })
-
-        if (labels[mount]) {
-            return labels[mount]
-        }
-
-        if (mount === '/') return 'Root'
-        if (mount === '/home') return 'Home'
-        if (mount === '/home/jmc/Storage/nvme1tb') return 'Steam'
-        if (mount === '/home/jmc/Storage/disk3tb') return '3 TB HD'
-        if (mount === '/home/jmc/Storage/disk8tb') return '8 TB HD'
-        if (mount === '/home/jmc/Storage/nvme2tb') return '2 TB NVME'
-        return mount.split('/').pop() || mount
-    }
-
     function formatSize(kb) {
         const units = ["KB", "MB", "GB", "TB"]
-        let size = parseInt(kb)
+        let size = parseInt(kb, 10) || 0
         let i = 0
         while (size >= 1024 && i < units.length - 1) {
             size /= 1024
@@ -122,50 +108,91 @@ PlasmoidItem {
         return size.toFixed(1) + " " + units[i]
     }
 
-    function parseDiskData(output) {
-        const allDisks = {}
-        const lines = (output || "").split('\n').filter(line => line.trim() && !line.startsWith('Filesystem'))
+    function syncDiskModel() {
+        const displayedDrives = root.getDisplayedDrives()
+        if (displayedDrives.length === 0) {
+            diskModel.clear()
+            return
+        }
 
-        lines.forEach(line => {
-            const parts = line.trim().split(/\s+/)
-            if (parts.length >= 5) {
-                const mount = parts[parts.length - 1]
-                const usedPercent = parseInt(parts[parts.length - 2]) || 0
-                const freePercent = 100 - usedPercent
-                const availRaw = parts[parts.length - 3].replace('K', '')
+        const colors = root.parseMountMap(plasmoid.configuration.driveColors, function(v) {
+            return /^#[0-9A-Fa-f]{6}$/.test(v)
+        })
+        const labels = root.parseMountMap(plasmoid.configuration.driveLabels, function(v) {
+            return v.length > 0
+        })
 
-                if (mount.startsWith('/') && !mount.startsWith('/sys') && !mount.startsWith('/proc') && !mount.startsWith('/run')) {
-                    allDisks[mount] = {
-                        "avail": formatSize(availRaw),
-                        "usedPercent": usedPercent,
-                        "freePercent": freePercent,
-                        "mount": mount,
-                        "color": getDriveColor(mount),
-                        "isOffline": false,
-                        "mountName": getDriveLabel(mount)
-                    }
+        const items = displayedDrives.map(function(mount) {
+            const stats = root.lastKnownStats[mount]
+            if (stats) {
+                return {
+                    "mount": mount,
+                    "avail": stats.avail,
+                    "usedPercent": stats.usedPercent,
+                    "freePercent": stats.freePercent,
+                    "color": colors[mount] || "#FFFFFF",
+                    "isOffline": false,
+                    "mountName": labels[mount] || root.fallbackLabel(mount)
                 }
             }
-        })
-
-        diskModel.clear()
-        const displayedDrives = plasmoid.configuration.displayedDrives.split('\n').map(m => m.trim()).filter(m => m)
-
-        displayedDrives.forEach(mount => {
-            if (allDisks[mount]) {
-                diskModel.append(allDisks[mount])
-            } else {
-                diskModel.append({
-                    "avail": "Offline",
-                    "usedPercent": 0,
-                    "freePercent": 0,
-                    "mount": mount,
-                    "color": getDriveColor(mount),
-                    "isOffline": true,
-                    "mountName": getDriveLabel(mount)
-                });
+            return {
+                "mount": mount,
+                "avail": i18n("Offline"),
+                "usedPercent": 0,
+                "freePercent": 0,
+                "color": colors[mount] || "#FFFFFF",
+                "isOffline": true,
+                "mountName": labels[mount] || root.fallbackLabel(mount)
             }
         })
+
+        let sameOrder = (diskModel.count === items.length)
+        if (sameOrder) {
+            for (let i = 0; i < items.length; ++i) {
+                if (diskModel.get(i).mount !== items[i].mount) {
+                    sameOrder = false
+                    break
+                }
+            }
+        }
+
+        if (sameOrder) {
+            for (let i = 0; i < items.length; ++i) {
+                diskModel.set(i, items[i])
+            }
+        } else {
+            diskModel.clear()
+            for (let i = 0; i < items.length; ++i) {
+                diskModel.append(items[i])
+            }
+        }
+    }
+
+    function parseDiskData(output) {
+        const allDisks = {}
+        const lines = (output || "").split('\n')
+        const rowRe = /^\s*(\d+)%\s+(\d+)K\s+(.+?)\s*$/
+
+        for (let i = 0; i < lines.length; ++i) {
+            const match = rowRe.exec(lines[i])
+            if (!match) continue
+
+            const usedPercent = parseInt(match[1], 10) || 0
+            const availKb = parseInt(match[2], 10) || 0
+            const mount = match[3]
+            if (!mount.startsWith('/') || mount.startsWith('/sys') || mount.startsWith('/proc') || mount.startsWith('/run')) {
+                continue
+            }
+
+            allDisks[mount] = {
+                "avail": formatSize(availKb),
+                "usedPercent": usedPercent,
+                "freePercent": Math.max(0, Math.min(100, 100 - usedPercent))
+            }
+        }
+
+        root.lastKnownStats = allDisks
+        root.syncDiskModel()
     }
 
     Component.onCompleted: {
