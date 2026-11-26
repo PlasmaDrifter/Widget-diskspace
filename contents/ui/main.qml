@@ -65,10 +65,28 @@ PlasmoidItem {
                 return
             }
 
-            const jobs = displayedDrives.map(function(m) {
-                return "timeout 2 df -BK --output=pcent,avail,target -- " + root.shellQuote(m) + " 2>/dev/null | sed -n '2p' &"
-            })
-            root.currentCmd = jobs.join(" ") + " wait"
+            const localMounts = []
+            const externalMounts = []
+            for (let i = 0; i < displayedDrives.length; ++i) {
+                const mount = displayedDrives[i]
+                if (mount.indexOf("/mnt/") === 0 || mount.indexOf("/media/") === 0 || mount.indexOf("/run/media/") === 0) {
+                    externalMounts.push(mount)
+                } else {
+                    localMounts.push(mount)
+                }
+            }
+
+            let script = ""
+            if (localMounts.length > 0) {
+                script = "timeout 2 df -BK --output=pcent,avail,target -- " + localMounts.map(root.shellQuote).join(" ") + " 2>/dev/null"
+            }
+            if (externalMounts.length > 0) {
+                const extJobs = externalMounts.map(function(m) {
+                    return "timeout 2 df -BK --output=pcent,avail,target -- " + root.shellQuote(m) + " 2>/dev/null &"
+                }).join(" ")
+                script = (script ? script + "; " : "") + extJobs + " wait"
+            }
+            root.currentCmd = script
             connectSource(root.currentCmd)
         }
 
@@ -200,7 +218,7 @@ PlasmoidItem {
     }
 
     Timer {
-        interval: 30000
+        interval: 60000
         running: true
         repeat: true
         onTriggered: dataSource.update()
